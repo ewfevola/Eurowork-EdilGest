@@ -238,7 +238,7 @@
       modulo({
         titolo: conf.titoloModifica ? conf.titoloModifica(valori) : 'Modifica',
         campi: conf.campi, valori,
-        salva: async d => { await db.aggiorna(conf.tabella, riga.id, d); dimentica(conf.tabella); avviso('Salvato'); conf.dopoSalva && conf.dopoSalva(); carica(); },
+        salva: async d => { if (conf.primaDiSalvare) d = await conf.primaDiSalvare(d, valori); await db.aggiorna(conf.tabella, riga.id, d); dimentica(conf.tabella); avviso('Salvato'); conf.dopoSalva && conf.dopoSalva(); carica(); },
         elimina: conf.eliminabile === false ? null : async () => { await db.elimina(conf.tabella, riga.id); dimentica(conf.tabella); carica(); }
       });
     }
@@ -252,7 +252,7 @@
     const bn = $('[data-nuovo]', el);
     if (bn) bn.onclick = () => typeof conf.nuovoAzione === 'function' ? conf.nuovoAzione() : modulo({
       titolo: conf.nuovo, campi: conf.campi, valori: typeof conf.predefiniti === 'function' ? conf.predefiniti() : (conf.predefiniti || {}),
-      salva: async d => { await db.inserisci(conf.tabella, { ...d, ...(conf.fissi || {}) }); dimentica(conf.tabella); avviso('Aggiunto'); conf.dopoSalva && conf.dopoSalva(); carica(); }
+      salva: async d => { if (conf.primaDiSalvare) d = await conf.primaDiSalvare(d, {}); await db.inserisci(conf.tabella, { ...d, ...(conf.fissi || {}) }); dimentica(conf.tabella); avviso('Aggiunto'); conf.dopoSalva && conf.dopoSalva(); carica(); }
     });
     const bx = $('[data-excel]', el);
     if (bx) bx.onclick = () => excel(conf.esporta, [{ nome: conf.esporta.slice(0, 31), righe: st.visibili.map(x => {

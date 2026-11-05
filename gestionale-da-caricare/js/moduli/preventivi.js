@@ -65,14 +65,14 @@
 
     el.innerHTML = App.testata(`Offerta ${p.numero}`, {
       sopra: `<a href="#preventivi">Offerte</a> / ${pill(p.stato)}${p.cantiere_id ? ` / <a href="#cantiere-${p.cantiere_id}">vai al cantiere</a>` : ''}`,
-      azioni: `<button class="btn vuoto" id="p-stampa">Stampa o salva PDF</button><button class="btn vuoto" id="p-duplica">Duplica</button>
+      azioni: `<button class="btn vuoto" id="p-stampa">Stampa o salva PDF</button><button class="btn vuoto" id="p-duplica">Duplica</button>${p.stato !== 'rifiutato' ? '<button class="btn vuoto" id="p-fattura">Crea fattura</button>' : ''}
         ${!p.cantiere_id && p.stato !== 'rifiutato' ? '<button class="btn vuoto" id="p-ordine">Crea ordine di cantiere</button>' : ''}
         <button class="btn testo" id="p-elimina">Elimina</button><button class="btn rosso" id="p-salva">Salva</button>`
     }) + `
       <div class="schede non-stampare" role="tablist" id="p-schede">
         <button role="tab" data-s="testa">Testata – dati generali</button><button role="tab" data-s="voci">Voci e analisi prezzi</button><button role="tab" data-s="fabb">Fabbisogno risorse</button>
       </div>
-      <div class="pannello non-stampare p-scheda" data-s="testa"><form id="p-testa" class="campi quattro"></form></div>
+      <div class="pannello non-stampare p-scheda" data-s="testa"><form id="p-testa" class="campi quattro"></form><div id="p-fatture"></div></div>
       <div class="pannello non-stampare p-scheda" data-s="voci">
         <div class="testata" style="margin-bottom:10px"><h2>Voci dell'offerta</h2><div class="azioni"><button class="btn vuoto piccolo" id="p-incolla">Incolla da Excel</button><button class="btn piccolo" id="p-voce">Aggiungi voce</button></div></div>
         <div class="scorri"><table class="tabella voci" id="p-voci"></table></div>
@@ -308,7 +308,50 @@
         ${testa.condizioni ? `<h3 style="margin-top:20px">Condizioni</h3><p>${esc(testa.condizioni).replace(/\n/g, '<br>')}</p>` : ''}
         <p style="margin-top:12px">Offerta valida ${testa.validita_giorni || 30} giorni dalla data.</p>
         <div style="display:flex;justify-content:space-between;margin-top:48px"><span>EUROWORK s.r.l.</span><span>Per accettazione ______________________</span></div>`;
-      window.print();
+      // il PDF si salva come PEW_<numero offerta>_<cliente>
+      const titolo = document.title; document.title = App.nomeFile('PEW', String(p.numero).replace('/', '-'), cli ? cli.ragione_sociale : '');
+      const torna = () => { document.title = titolo; window.removeEventListener('afterprint', torna); };
+      window.addEventListener('afterprint', torna); window.print(); setTimeout(torna, 1500);
+    };
+
+    // ---------- Dall'offerta alla fattura ----------
+    const fattureDi = await db.lista('fatture', { eq: { preventivo_id: id, tipo: 'emessa' }, ordina: 'data' }).catch(() => []);
+    if (fattureDi.length) {
+      const tot = fattureDi.reduce((s, f) => s + Number(f.imponibile), 0);
+      $('#p-fatture', el).innerHTML = `<h3 style="margin:18px 0 8px">Fatture collegate a questa offerta</h3><table class="tabella"><thead><tr><th>Numero</th><th>Data</th><th>Descrizione</th><th class="num">Imponibile</th><th></th></tr></thead>
+        <tbody>${fattureDi.map(f => `<tr><td><b>${esc(f.numero)}</b>${f.cortesia ? ' <span class="stato giallo">cortesia</span>' : ''}</td><td>${fmt.data(f.data)}</td><td>${esc(f.descrizione)}</td><td class="num">${fmt.euro(f.imponibile)}</td><td><button class="btn vuoto piccolo" data-cort="${f.id}">Copia di cortesia</button></td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="3">Fatturato su questa offerta</td><td class="num">${fmt.euro(tot)}</td><td></td></tr></tfoot></table>`;
+      $('#p-fatture', el).onclick = e => { const b = e.target.closest('[data-cort]'); if (b) App.stampaFatturaCortesia({ id: Number(b.dataset.cort) }); };
+    }
+    const bf = $('#p-fattura', el);
+    if (bf) bf.onclick = async () => {
+      try { await salva(); } catch (e) { return errore(e); }
+      const t = calcola(p, voci), gia = fattureDi.reduce((s, f) => s + Number(f.imponibile), 0);
+      const [cli, cant, emesse] = await Promise.all([p.cliente_id ? db.uno('anagrafiche', p.cliente_id) : null, p.cantiere_id ? db.uno('cantieri', p.cantiere_id) : null, db.lista('fatture', { eq: { tipo: 'emessa' }, sel: 'numero,data' })]);
+      if (!cli) return errore(new Error('Scegli prima il cliente nella testata dell\'offerta.'));
+      const anno = fmt.oggi().slice(0, 4), prossimo = Math.max(0, ...emesse.filter(f => (f.data || '').startsWith(anno)).map(f => parseInt(f.numero, 10) || 0)) + 1;
+      const resto = Math.max(0, Math.round((t.netto - gia) * 100) / 100);
+      ui.modulo({ titolo: `Fattura dall'offerta ${p.numero}`, testoSalva: 'Crea la fattura',
+        valori: { numero: `${String(prossimo).padStart(2, '0')}/${anno}`, data: fmt.oggi(), pct: gia ? Math.round(resto / t.netto * 10000) / 100 : 100, descrizione: `${p.oggetto || 'Lavori'} – come da offerta n. ${p.numero} del ${fmt.data(p.data)}`,
+          iva_pct: p.iva_pct ?? 22, regime: cli.tipo === 'ente' ? 'split payment' : 'ordinario', scadenza: fmt.piuGiorni(fmt.oggi(), 60), metodo_pagamento: 'Bonifico', cig: cant ? cant.cig : '', cup: cant ? cant.cup : '', cortesia: false },
+        campi: [{ k: 'numero', label: 'Numero', richiesto: true, aiuto: 'Lo stesso che userai in Fatturazione CGN' }, { k: 'data', label: 'Data', tipo: 'data', richiesto: true },
+          { k: 'pct', label: 'Quanta parte dell\'offerta fatturare', tipo: 'pct', richiesto: true, aiuto: `Offerta ${fmt.euro(t.netto)}${gia ? `, già fatturati ${fmt.euro(gia)}` : ''}. Per un acconto scrivi per esempio 30.` },
+          { k: 'descrizione', label: 'Descrizione in fattura', tipo: 'area', richiesto: true },
+          { k: 'cig', label: 'CIG' }, { k: 'cup', label: 'CUP' },
+          { k: 'regime', label: 'Regime IVA', tipo: 'select', richiesto: true, opzioni: [['ordinario', 'Ordinario'], ['split payment', 'Split payment (enti pubblici)'], ['reverse charge', 'Reverse charge'], ['esente', 'Esente / non imponibile']] },
+          { k: 'iva_pct', label: 'Aliquota IVA', tipo: 'pct' }, { k: 'scadenza', label: 'Scadenza pagamento', tipo: 'data' },
+          { k: 'metodo_pagamento', label: 'Metodo di pagamento', tipo: 'select', opzioni: App.METODI_PAGAMENTO }, { k: 'iban', label: 'IBAN su cui ricevere il pagamento' },
+          { k: 'cortesia', label: 'È una fattura di cortesia (l\'elettronica partirà dopo con CGN)', tipo: 'bool' }],
+        salva: async d => {
+          const { pct, ...resto2 } = d;
+          const imp = Math.round(t.netto * Number(pct) / 100 * 100) / 100;
+          if (!(imp > 0)) throw new Error('L\'importo da fatturare è zero.');
+          const f = await db.inserisci('fatture', { tipo: 'emessa', ...resto2, iban: resto2.iban || '', anagrafica_id: p.cliente_id, cantiere_id: p.cantiere_id || null, preventivo_id: id, rif_preventivo: '', categoria: '', imponibile: imp, pagata: false,
+            note: [Number(pct) < 100 ? `${fmt.pct(pct)} dell'offerta ${p.numero}` : '', ...voci.map(v => `${v.codice ? v.codice + ' ' : ''}${(v.descrizione || '').split('\n')[0]}: ${fmt.num(v.quantita)} ${v.um} × ${fmt.euro(v.prezzo)}`)].filter(Boolean).join('\n'), origine: 'preventivo' });
+          ui.dimentica('fatture'); avviso(`Fattura ${f.numero} creata da questa offerta`);
+          if (await ui.conferma('Vuoi stampare subito la copia di cortesia da mandare al cliente?', { si: 'Stampa la copia di cortesia', no: 'No, grazie' })) App.stampaFatturaCortesia(f);
+          ui.pagine.preventivo(el, id);
+        } });
     };
 
     window.addEventListener('beforeunload', function avvisa(e) { if (!document.body.contains(el) || !$('#p-voci', el)) return window.removeEventListener('beforeunload', avvisa); if (modificato) e.preventDefault(); });

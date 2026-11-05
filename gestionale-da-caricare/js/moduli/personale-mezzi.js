@@ -71,6 +71,8 @@
     { k: 'contatto_emergenza', label: 'Chi avvisare in caso di emergenza', aiuto: 'Nome e telefono' },
     { k: 'automunito', label: 'Automunito (ha un\'auto propria)', tipo: 'bool' },
     { k: 'patente', label: 'Patenti', aiuto: 'es. B, C, CQC' },
+    { k: 'competenze', label: 'Competenze', largo: true, aiuto: 'Separate da virgola, es. Barriere e guardrail, Saldatura. Più comodo dalla scheda "Competenze". Servono all\'assistente per comporre le squadre.' },
+    { k: 'ore_settimanali', label: 'Ore settimanali', tipo: 'numero', aiuto: '40 a tempo pieno' },
     { k: 'data_assunzione', label: 'Data di assunzione', tipo: 'data' },
     { k: 'tipo_contratto', label: 'Contratto', tipo: 'select', opzioni: ['Tempo indeterminato', 'Tempo determinato', 'Apprendistato', 'Stagionale', 'Somministrato', 'Altro'] },
     { k: 'costo_orario', label: 'Costo orario aziendale', tipo: 'euro', aiuto: 'Serve per calcolare il costo della manodopera sui cantieri' },
@@ -80,7 +82,8 @@
 
   ui.pagina('personale', async el => {
     el.innerHTML = App.testata('Anagrafica dipendenti') + '<div id="schede-pers"></div>';
-    App.schede($('#schede-pers', el), [['lavoratori', 'Dipendenti'], ['pagelle', 'Pagelle e crescita'], ['scadenziario', 'Scadenziario dei dipendenti']], null, (k, corpo) => {
+    App.schede($('#schede-pers', el), [['lavoratori', 'Dipendenti'], ['competenze', 'Competenze'], ['pagelle', 'Pagelle e crescita'], ['scadenziario', 'Scadenziario dei dipendenti']], null, (k, corpo) => {
+      if (k === 'competenze') return App.matriceCompetenze(corpo);
       if (k === 'scadenziario') return App.scadenziario(corpo, { ambito: 'personale' });
       if (k === 'pagelle') return App.tabellonePagelle(corpo);
       corpo.innerHTML = '<div id="el-lav"></div>';
@@ -94,7 +97,7 @@
           filtroDoc(CI, 'Carta d\'identità'), filtroDoc(VM, 'Visita medica'), filtroDoc(PS, 'Permesso di soggiorno', true),
           { k: 'tipo_contratto', label: 'Contratto', opzioni: [['', 'Tutti'], 'Tempo indeterminato', 'Tempo determinato', 'Apprendistato', 'Stagionale', 'Somministrato', 'Altro'] }
         ],
-        campi: campiLavoratore(), predefiniti: { attivo: true, automunito: false },
+        campi: campiLavoratore(), predefiniti: { attivo: true, automunito: false, ore_settimanali: 40 },
         apri: r => ui.vai('lavoratore', r.id),
         colonne: [
           { k: 'cognome', t: 'Cognome e nome', f: r => `<b>${esc(r.cognome)} ${esc(r.nome)}</b>`, x: r => `${r.cognome} ${r.nome}` },
@@ -133,7 +136,7 @@
           <dl class="ck-dati lv-dati">${riga('Qualifica', esc(l.qualifica))}${riga('Codice fiscale', esc(l.codice_fiscale))}${riga('Nato il', [fmt.data(l.data_nascita), esc(l.luogo_nascita || '')].filter(Boolean).join(' a '))}
             ${riga('Telefono', l.telefono ? `<a href="tel:${esc(l.telefono)}">${esc(l.telefono)}</a>` : '')}${riga('Email', l.email ? `<a href="mailto:${esc(l.email)}">${esc(l.email)}</a>` : '')}
             ${riga('Residenza', esc([l.indirizzo, l.comune].filter(Boolean).join(', ')))}${riga('Emergenze', esc(l.contatto_emergenza))}
-            ${riga('Contratto', esc(l.tipo_contratto))}${riga('Assunto il', fmt.data(l.data_assunzione))}${riga('Costo orario', n(l.costo_orario) ? fmt.euro(l.costo_orario) : '')}${riga('Note', esc(l.note))}</dl></section>
+            ${riga('Competenze', esc(l.competenze || ''))}${riga('Contratto', esc(l.tipo_contratto))}${n(l.ore_settimanali) && n(l.ore_settimanali) !== 40 ? riga('Ore settimanali', n(l.ore_settimanali)) : ''}${riga('Assunto il', fmt.data(l.data_assunzione))}${riga('Costo orario', n(l.costo_orario) ? fmt.euro(l.costo_orario) : '')}${riga('Note', esc(l.note))}</dl></section>
         <section class="pannello lv-archivio"><h2>Archivio documenti</h2>
           <div class="lv-arch"><ul class="lv-cartelle" role="list">
             <li><button data-c="" aria-current="${!cartella}">Tutti <span>${docs.length}</span></button></li>

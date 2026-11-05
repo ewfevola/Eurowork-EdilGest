@@ -8,6 +8,8 @@
     presenze: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     cronoprogramma: '<path d="M3 5h18M3 19h18"/><path d="M5 9h8M9 13h9M7 17h6" stroke-width="3"/>',
     giornale: '<path d="M5 3h11l3 3v15H5z"/><path d="M9 9h6M9 13h6M9 17h4"/>',
+    assistente: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+    squadre: '<circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="7" r="2.5"/><path d="M2 15c.5-2.5 2-4 4-4s3.5 1.5 4 4M14 15c.5-2.5 2-4 4-4s3.5 1.5 4 4"/><path d="M8 20h8"/>',
     stipendi: '<rect x="3" y="5" width="18" height="14"/><path d="M3 10h18M7 15h4"/>',
     personale: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.6c2 .7 3.2 2.5 3.5 5.4"/>',
     mezzi: '<path d="M2 17V9h11v8M13 12h5l3 3v2h-8"/><circle cx="6.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/>',
@@ -22,6 +24,7 @@
 
   const MENU_UFFICIO = [
     [null, [['home', 'Home'], ['cantieri', 'Cantieri'], ['presenze', 'Presenze'], ['giornale', 'Giornale lavori'], ['cronoprogramma', 'Cronoprogramma']]],
+    ['Assistente IA', [['assistente', 'Da approvare'], ['squadre', 'Pianifica squadre']]],
     ['Persone e mezzi', [['personale', 'Anagrafica dipendenti'], ['stipendi', 'Elaborazione dati stipendio'], ['mezzi', 'Mezzi e attrezzature'], ['scadenze', 'Scadenze']]],
     ['Amministrazione', [['preventivi', 'Preventivi'], ['contabilita', 'Contabilità'], ['costifissi', 'Costi fissi aziendali'], ['anagrafiche', 'Clienti e fornitori']]],
     ['Archivio', [['documenti', 'Documenti'], ['utenti', 'Utenti']]]

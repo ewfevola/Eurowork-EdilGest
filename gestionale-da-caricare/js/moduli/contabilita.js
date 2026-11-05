@@ -18,6 +18,11 @@
       { k: 'data', label: 'Data', tipo: 'data', richiesto: true },
       { k: 'anagrafica_id', label: tipo === 'emessa' ? 'Cliente' : 'Fornitore', tipo: 'rif', rif: tipo === 'emessa' ? App.RIF.cliente : App.RIF.fornitore, richiesto: true },
       { k: 'cantiere_id', label: 'Cantiere', tipo: 'rif', rif: App.RIF.cantiere },
+      ...(tipo === 'emessa' ? [
+        { k: 'cig', label: 'CIG', aiuto: 'Se lo lasci vuoto si prende quello del cantiere' },
+        { k: 'cup', label: 'CUP', aiuto: 'Se lo lasci vuoto si prende quello del cantiere' },
+        { k: 'preventivo_id', label: 'Riferimento all\'offerta', tipo: 'rif', rif: App.RIF.preventivo, aiuto: 'Scegli l\'offerta dall\'elenco…' },
+        { k: 'rif_preventivo', label: '…oppure scrivi il riferimento', aiuto: 'es. "Vs. ordine n. 45 del 10/10/2026" o un\'offerta non presente nel gestionale' }] : []),
       { k: 'descrizione', label: tipo === 'emessa' ? 'Descrizione (es. SAL n. 2)' : 'Descrizione', largo: true },
       ...(tipo === 'ricevuta' ? [{ k: 'categoria', label: 'Voce di costo', tipo: 'select', opzioni: App.CATEGORIE_COSTO, richiesto: true }] : []),
       { k: 'imponibile', label: 'Imponibile', tipo: 'euro', richiesto: true },
@@ -28,9 +33,20 @@
       { k: 'iban', label: tipo === 'emessa' ? 'IBAN su cui ricevere il pagamento' : 'IBAN del fornitore', mostraSe: d => ['Bonifico', 'RiBa', 'Addebito SEPA (RID)', ''].includes(d.metodo_pagamento) },
       { k: 'pagata', label: tipo === 'emessa' ? 'Già incassata prima di usare il gestionale' : 'Già pagata prima di usare il gestionale', tipo: 'bool', aiuto: 'Per i pagamenti nuovi usa il pulsante nell\'elenco: così finiscono anche in prima nota.' },
       { k: 'data_pagamento', label: tipo === 'emessa' ? 'Data incasso' : 'Data pagamento', tipo: 'data', mostraSe: d => d.pagata },
+      { k: 'cortesia', label: tipo === 'emessa' ? 'Fattura di cortesia: l\'elettronica non è ancora stata inviata con CGN' : 'Copia di cortesia: la fattura elettronica deve ancora arrivare', tipo: 'bool',
+        aiuto: tipo === 'emessa' ? 'Toglila quando la fattura parte dallo SDI.' : 'Quando importi l\'XML, il gestionale la riconosce e la sostituisce da solo.' },
       { k: 'note', label: 'Note', tipo: 'area' }
     ];
   }
+  App.RIF.preventivo = { tab: 'preventivi', q: { ordina: 'data.desc', sel: 'id,numero,oggetto,cliente_id,cantiere_id' }, etichetta: r => `${r.numero}${r.oggetto ? ' – ' + r.oggetto : ''}` };
+  App.campiFattura = campiFattura;
+  // CIG e CUP vuoti: si prendono dal cantiere; cantiere vuoto: si prende dall'offerta collegata
+  App.completaFattura = async d => {
+    const x = { ...d };
+    if (x.preventivo_id && !x.cantiere_id) { const p = await db.uno('preventivi', x.preventivo_id).catch(() => null); if (p && p.cantiere_id) x.cantiere_id = p.cantiere_id; }
+    if (x.cantiere_id && ('cig' in x || 'cup' in x) && (!x.cig || !x.cup)) { const c = await db.uno('cantieri', x.cantiere_id).catch(() => null); if (c) { if (!x.cig) x.cig = c.cig || ''; if (!x.cup) x.cup = c.cup || ''; } }
+    return x;
+  };
 
   // Elenco di fatture, usato in Contabilità e nella scheda del cantiere.
   App.elencoFatture = function (el, tipo, fissi = {}, opz = {}) {
@@ -38,41 +54,79 @@
     const conElenco = ui.elenco(el, {
       tabella: 'fatture', esporta: tipo === 'emessa' ? 'Fatture emesse' : 'Fatture ricevute',
       nuovo: tipo === 'emessa' ? 'Registra fattura emessa' : 'Registra fattura ricevuta',
-      q: { sel: '*,anagrafica:anagrafiche(ragione_sociale),cantiere:cantieri(nome)', eq: { tipo, ...fissi }, ...(opz.senzaCantiere ? { nullo: { cantiere_id: true } } : {}) }, ordina: 'data.desc,numero.desc',
+      q: { sel: '*,anagrafica:anagrafiche(ragione_sociale),cantiere:cantieri(nome),preventivo:preventivi(id,numero)', eq: { tipo, ...fissi }, ...(opz.senzaCantiere ? { nullo: { cantiere_id: true } } : {}) }, ordina: 'data.desc,numero.desc',
       fissi: { tipo, ...fissi },
       cerca: ['numero', 'descrizione'],
       filtri: [
+        { k: 'cortesia', label: 'Tipo', opzioni: [['', 'Tutte'], ['false', 'Elettroniche'], ['true', 'Di cortesia']] },
         { k: 'stato', label: 'Stato', opzioni: [['', 'Tutte'], ['aperte', tipo === 'emessa' ? 'Da incassare' : 'Da pagare'], ['scadute', 'Scadute'], ['pagate', tipo === 'emessa' ? 'Incassate' : 'Pagate']],
           applica: (q, v) => { if (v === 'aperte') q.eq.pagata = false; if (v === 'pagate') q.eq.pagata = true; if (v === 'scadute') { q.eq.pagata = false; q.lt = { scadenza: oggi }; } } },
         ...(fissi.cantiere_id ? [] : [{ k: 'anno', label: 'Anno', predef: String(anno), opzioni: [['', 'Tutti'], ...[0, 1, 2].map(i => [String(anno - i), String(anno - i)])],
           applica: (q, v) => { q.gte = { ...(q.gte || {}), data: `${v}-01-01` }; q.lte = { ...(q.lte || {}), data: `${v}-12-31` }; } }])
       ],
       campi: campiFattura(tipo).filter(c => !(c.k in fissi)),
+      primaDiSalvare: d => App.completaFattura(d),
       predefiniti: () => ({ data: oggi, iva_pct: 22, regime: 'ordinario', categoria: 'Materiali', scadenza: fmt.piuGiorni(oggi, 30), metodo_pagamento: 'Bonifico' }),
       titoloModifica: r => `Fattura ${r.numero}`,
       colonne: [
-        { k: 'numero', t: 'Numero', f: r => `<b>${esc(r.numero)}</b>` },
+        { k: 'numero', t: 'Numero', f: r => `<b>${esc(r.numero)}</b>${r.cortesia ? ' <span class="stato giallo" title="Copia di cortesia">cortesia</span>' : ''}`, x: r => r.numero + (r.cortesia ? ' cortesia' : '') },
         { k: 'data', t: 'Data', f: r => fmt.data(r.data) },
         { k: 'anagrafica', t: tipo === 'emessa' ? 'Cliente' : 'Fornitore', f: r => esc(r.anagrafica ? r.anagrafica.ragione_sociale : '') },
         ...(fissi.cantiere_id ? [] : [{ k: 'cantiere', t: 'Cantiere', f: r => esc(r.cantiere ? r.cantiere.nome : '') }]),
         { k: 'descrizione', t: 'Descrizione' },
+        ...(tipo === 'emessa' ? [{ k: 'rif', t: 'Riferimenti', f: r => [r.preventivo ? `<a href="#preventivo-${r.preventivo.id}" title="Apri l'offerta">Offerta ${esc(r.preventivo.numero)}</a>` : r.rif_preventivo ? esc(r.rif_preventivo) : '', r.cig ? `CIG ${esc(r.cig)}` : '', r.cup ? `CUP ${esc(r.cup)}` : ''].filter(Boolean).join('<br>'),
+          x: r => [r.preventivo ? 'Offerta ' + r.preventivo.numero : r.rif_preventivo, r.cig && 'CIG ' + r.cig, r.cup && 'CUP ' + r.cup].filter(Boolean).join(' ') }] : []),
         { k: 'imponibile', t: 'Imponibile', num: true, f: r => fmt.euro(r.imponibile), x: r => Number(r.imponibile) },
         { k: 'totale', t: 'Totale', num: true, f: r => fmt.euro(r.totale), x: r => Number(r.totale) },
         { k: 'scadenza', t: 'Scadenza', f: r => fmt.data(r.scadenza) },
         { k: 'metodo_pagamento', t: 'Metodo' },
         { k: 'residuo', t: tipo === 'emessa' ? 'Da incassare' : 'Da pagare', num: true, f: r => r.pagata ? '' : fmt.euro(residuo(r)), x: r => r.pagata ? 0 : residuo(r) },
         { k: 'stato', t: 'Stato', f: statoFattura, x: r => r.pagata ? 'pagata' : Number(r.importo_pagato) > 0 ? 'pagata in parte' : 'aperta' },
-        { k: 'az', t: '', f: r => r.pagata ? '' : `<button class="btn vuoto piccolo" data-paga="${r.id}">${tipo === 'emessa' ? 'Incassa' : 'Paga'}</button>`, x: () => '' }
+        { k: 'az', t: '', f: r => `<span class="az-fatt">${tipo === 'emessa' ? `<button class="btn vuoto piccolo" data-cortesia="${r.id}" title="Stampa o salva in PDF la copia di cortesia da mandare al cliente">Copia di cortesia</button>` : ''}${r.pagata ? '' : `<button class="btn vuoto piccolo" data-paga="${r.id}">${tipo === 'emessa' ? 'Incassa' : 'Paga'}</button>`}</span>`, x: () => '' }
       ],
       classeRiga: r => r.pagata ? 'spento' : '',
       piede: r => `<tr><td colspan="${fissi.cantiere_id ? 4 : 5}">Totale</td><td class="num">${fmt.euro(r.reduce((s, x) => s + Number(x.imponibile), 0))}</td><td class="num">${fmt.euro(r.reduce((s, x) => s + Number(x.totale), 0))}</td><td colspan="2"></td><td class="num">${fmt.euro(r.filter(x => !x.pagata).reduce((s, x) => s + residuo(x), 0))}</td><td colspan="2"></td></tr>`
     });
     el.addEventListener('click', async e => {
+      const bc = e.target.closest('[data-cortesia]'); if (bc) return App.stampaFatturaCortesia(conElenco.righe.find(x => String(x.id) === bc.dataset.cortesia));
       const b = e.target.closest('[data-paga]'); if (!b) return;
       const f = conElenco.righe.find(x => String(x.id) === b.dataset.paga);
       App.registraPagamento(f, conElenco.ricarica);
     });
     return conElenco;
+  };
+
+  // ---------- Copia di cortesia di una fattura emessa (PDF da mandare al cliente) ----------
+  const nomeFile = (...p) => p.filter(Boolean).map(x => String(x).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim()).join('_');
+  App.nomeFile = nomeFile;
+  App.stampaConNome = (html, nome) => {
+    const f = document.createElement('div'); f.className = 'solo-stampa foglio-isolato'; f.innerHTML = html;
+    document.body.append(f); document.body.classList.add('stampa-isolata');
+    const titolo = document.title; document.title = nome;   // il PDF prende il nome dal titolo della pagina
+    const via = () => { f.remove(); document.body.classList.remove('stampa-isolata'); document.title = titolo; window.removeEventListener('afterprint', via); };
+    window.addEventListener('afterprint', via); window.print(); setTimeout(via, 1500);
+  };
+  App.stampaFatturaCortesia = async function (f0) {
+    try {
+      const f = await db.uno('fatture', f0.id, '*,anagrafica:anagrafiche(*),cantiere:cantieri(nome,comune,cig,cup),preventivo:preventivi(numero,data,oggetto)');
+      const a = f.anagrafica || {}, iva = Number(f.iva) || 0, split = f.regime === 'split payment', rc = f.regime === 'reverse charge', es = f.regime === 'esente';
+      const nota = split ? 'Scissione dei pagamenti (split payment) ai sensi dell\'art. 17-ter del DPR 633/1972: l\'IVA è versata dal committente.'
+        : rc ? 'Operazione soggetta a inversione contabile (reverse charge) ai sensi dell\'art. 17 del DPR 633/1972: l\'IVA è a carico del committente.' : es ? 'Operazione non imponibile / esente IVA.' : '';
+      const riga = (k, v) => v ? `<tr><th>${k}</th><td>${v}</td></tr>` : '';
+      const html = App.intestazioneStampa(`Fattura n. ${esc(f.numero)}`, `del ${fmt.data(f.data)} · COPIA DI CORTESIA`) + `
+        <div class="fc-due"><div><h3>Cliente</h3><p><b>${esc(a.ragione_sociale || '')}</b><br>${esc(a.indirizzo || '')}<br>${esc([a.cap, a.comune, a.provincia && '(' + a.provincia + ')'].filter(Boolean).join(' '))}
+          ${a.piva ? '<br>P.IVA ' + esc(a.piva) : ''}${a.codice_fiscale ? '<br>C.F. ' + esc(a.codice_fiscale) : ''}${a.codice_destinatario ? '<br>Codice destinatario ' + esc(a.codice_destinatario) : ''}${a.pec ? '<br>PEC ' + esc(a.pec) : ''}</p></div>
+          <div><h3>Riferimenti</h3><table class="fc-rif">${riga('Cantiere', esc(f.cantiere ? f.cantiere.nome + (f.cantiere.comune ? ' – ' + f.cantiere.comune : '') : ''))}${riga('CIG', esc(f.cig || ''))}${riga('CUP', esc(f.cup || ''))}
+            ${riga('Offerta', f.preventivo ? `n. ${esc(f.preventivo.numero)} del ${fmt.data(f.preventivo.data)}` : esc(f.rif_preventivo || ''))}</table></div></div>
+        <table class="tabella" style="margin-top:16px"><thead><tr><th>Descrizione</th><th class="num">Imponibile</th><th class="num">IVA</th></tr></thead>
+          <tbody><tr><td>${esc(f.descrizione || '').replace(/\n/g, '<br>')}${f.preventivo && f.preventivo.oggetto ? `<br><span class="nota">${esc(f.preventivo.oggetto)}</span>` : ''}</td><td class="num">${fmt.euro(f.imponibile)}</td><td class="num">${es ? 'esente' : fmt.pct(f.iva_pct)}</td></tr></tbody></table>
+        <div class="totali-prev"><div><span>Imponibile</span><span class="num">${fmt.euro(f.imponibile)}</span></div><div><span>IVA ${es ? '' : fmt.pct(f.iva_pct)}</span><span class="num">${fmt.euro(iva)}</span></div>
+          <div><span>Totale documento</span><span class="num">${fmt.euro(f.totale)}</span></div><div class="forte"><span>Netto a pagare</span><span class="num">${fmt.euro(f.da_pagare)}</span></div></div>
+        ${nota ? `<p style="margin-top:12px">${esc(nota)}</p>` : ''}
+        <h3 style="margin-top:16px">Pagamento</h3><p>${esc(f.metodo_pagamento || '')}${f.scadenza ? ` entro il ${fmt.data(f.scadenza)}` : ''}${f.iban ? `<br>IBAN ${esc(f.iban)}` : ''}</p>
+        <p class="fc-avviso">Copia di cortesia priva di valore fiscale ai sensi dell'art. 21 del DPR 633/1972. La fattura elettronica originale è trasmessa tramite il Sistema di Interscambio ed è disponibile nell'area riservata del sito dell'Agenzia delle Entrate.</p>`;
+      App.stampaConNome(html, nomeFile('Fattura', f.numero, a.ragione_sociale));
+    } catch (e) { errore(e); }
   };
 
   // Nuova fattura ricevuta già compilata (es. da una spesa prevista); dopo(fattura) quando è salvata.

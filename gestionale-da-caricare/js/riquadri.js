@@ -3,10 +3,10 @@
   const { $, esc, fmt, avviso, errore } = ui;
 
   const TINTE = { home: 'ardesia', cantieri: 'blu', cantiere: 'blu', giornale: 'blu', cronoprogramma: 'blu', documenti: 'blu', presenze: 'verde', mezzi: 'verde',
-    preventivi: 'arancio', preventivo: 'arancio', anagrafiche: 'teal', contabilita: 'rosso', costifissi: 'bordeaux', personale: 'bordeaux', stipendi: 'bordeaux', lavoratore: 'bordeaux', mezzo: 'verde', scadenze: 'bordeaux', utenti: 'bordeaux' };
+    preventivi: 'arancio', preventivo: 'arancio', anagrafiche: 'teal', contabilita: 'rosso', costifissi: 'bordeaux', personale: 'bordeaux', stipendi: 'bordeaux', lavoratore: 'bordeaux', assistente: 'viola', squadre: 'viola', mezzo: 'verde', scadenze: 'bordeaux', utenti: 'bordeaux' };
   const NOMI = { cantieri: 'Cantieri', cantiere: 'Cantieri', giornale: 'Giornale lavori', cronoprogramma: 'Cronoprogramma', documenti: 'Documenti', presenze: 'Presenze', mezzi: 'Mezzi e attrezzature',
     preventivi: 'Preventivi', preventivo: 'Preventivi', anagrafiche: 'Clienti e fornitori', contabilita: 'Contabilità', costifissi: 'Costi fissi aziendali',
-    personale: 'Anagrafica dipendenti', lavoratore: 'Anagrafica dipendenti', stipendi: 'Elaborazione dati stipendio', mezzo: 'Mezzi e attrezzature', scadenze: 'Scadenze', utenti: 'Utenti' };
+    personale: 'Anagrafica dipendenti', lavoratore: 'Anagrafica dipendenti', stipendi: 'Elaborazione dati stipendio', assistente: 'Assistente', squadre: 'Pianifica squadre', mezzo: 'Mezzi e attrezzature', scadenze: 'Scadenze', utenti: 'Utenti' };
   const I = {
     cantieri: '<path d="M2 20h20M5 20V9l7-5 7 5v11"/><path d="M9 20v-6h6v6"/>',
     giornale: '<path d="M5 3h11l3 3v15H5z"/><path d="M9 9h6M9 13h6M9 17h4"/>',
@@ -26,6 +26,9 @@
     persone: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.6c2 .7 3.2 2.5 3.5 5.4"/>',
     utente: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
     sede: '<path d="M4 20V10l8-6 8 6v10z"/><path d="M9 14h6M9 17h6"/>',
+    stella: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+    squadre: '<circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="7" r="2.5"/><path d="M2 15c.5-2.5 2-4 4-4s3.5 1.5 4 4M14 15c.5-2.5 2-4 4-4s3.5 1.5 4 4"/><path d="M8 20h8M13 17.5l3 2.5-3 2.5"/>',
+    scanner: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M7 12h10"/>',
     gantt: '<path d="M3 5h18M3 19h18"/><path d="M5 9h8M9 13h9M7 17h6" stroke-width="3"/>',
     griglia: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>'
   };
@@ -60,6 +63,7 @@
     if (location.hash === '#' + pagina) ui.pagine[pagina]($('#contenuto')); else location.hash = pagina;
   };
   const AZIONI = {
+    leggiDoc: () => { try { sessionStorage.setItem('scheda-proposte,documento,registro', 'documento'); } catch {} location.hash = 'assistente'; },
     nuovoCantiere: () => ui.modulo({ titolo: 'Nuovo cantiere', campi: App.campiCantiere(), valori: { stato: 'aperto' },
       salva: async d => { const c = await db.inserisci('cantieri', d); ui.dimentica('cantieri'); avviso('Cantiere creato'); ui.vai('cantiere', c.id); } }),
     nuovoPreventivo: async () => { try { const p = await db.inserisci('preventivi', { oggetto: '', condizioni: 'Prezzi validi per lavori eseguiti in orario diurno. Esclusi oneri non indicati. Pagamento: 60 giorni data fattura.' }); ui.vai('preventivo', p.id); } catch (e) { errore(e); } },
@@ -117,6 +121,8 @@
     const budgetDi = id => budget.filter(b => b.cantiere_id === id).reduce((s, b) => s + Number(b.importo), 0);
     const inPerdita = econ.filter(c => c.costi_totali > c.fatturato && c.fatturato > 0).length, oltreBudget = econ.filter(c => budgetDi(c.cantiere_id) && c.costi_totali > budgetDi(c.cantiere_id)).length;
     const pagScaduti = fatt.filter(f => f.tipo === 'ricevuta' && f.scadenza && f.scadenza < oggi).length;
+    const ia = capo || !App.propostaIA ? [] : await App.propostaIA().catch(() => []);
+    const squadreDaFare = ia.some(p => p.k.startsWith('squadre-')), iaAltre = ia.filter(p => !p.k.startsWith('squadre-')).length;
     const oraAdesso = Number(new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: 'numeric', hour12: false }).format(new Date()));
     const euroBreve = n => n >= 1000 ? new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(n / 1000) + 'k €' : fmt.euro(n);
 
@@ -132,6 +138,10 @@
         { d: 'medio', c: 'teal', t: 'Cronoprogramma', ico: 'gantt', vai: 'cronoprogramma', vivo: inCorso || null, sotto: inCorso ? 'attività in corso' : '', sem: ritardo ? 'rosso' : 'verde', semTesto: ritardo ? `${ritardo} attività in ritardo` : 'Nessun ritardo', segnale: ritardo ? `${ritardo} in ritardo` : '' },
         { d: 'piccolo', t: 'Nuovo cantiere', ico: 'piu', azione: 'nuovoCantiere' },
         { d: 'piccolo', t: 'Documenti e foto', ico: 'foto', vai: 'documenti' }] },
+      { g: 'Assistente IA', tessere: [
+        { d: 'grande', c: 'viola', t: 'Da approvare', ico: 'stella', vai: 'assistente', vivo: ia.length || '✓', sotto: ia.length ? (ia.length === 1 ? 'proposta pronta da confermare' : 'proposte pronte da confermare') : 'niente da decidere', sem: ia.length ? 'giallo' : 'verde', semTesto: ia.length ? 'L\'assistente ha preparato delle proposte: controllale e conferma' : 'Tutto in ordine', segnale: ia.length ? `${ia.length} da approvare` : '' },
+        { d: 'medio', c: 'viola-2', t: 'Pianifica squadre', ico: 'squadre', vai: 'squadre', sotto: squadreDaFare ? 'proposta pronta per la prossima settimana' : 'prossima settimana approvata', sem: squadreDaFare ? 'giallo' : 'verde', semTesto: squadreDaFare ? 'Squadre della prossima settimana da approvare' : 'Squadre approvate' },
+        { d: 'medio', c: 'viola-2', t: 'Leggi un documento', ico: 'scanner', azione: 'leggiDoc', sotto: 'DDT, fatture, scontrini' }] },
       { g: 'Presenze e mezzi', tessere: [
         { d: 'grande', c: 'verde', t: 'Timbra presenze', ico: 'orologio', azione: 'timbra', vivo: dentro, sotto: `in cantiere ora su ${lav.length}`, barra: lav.length ? dentro / lav.length * 100 : null, sem: 'verde', semTesto: 'Aggiornato in tempo reale' },
         { d: 'medio', c: 'verde-2', t: 'Mezzi e attrezzature', ico: 'mezzo', vai: 'mezzi', vivo: `${impegnati}/${mezzi.length}`, sotto: 'impegnati in cantiere', sem: guasti ? 'rosso' : 'verde', semTesto: guasti ? `${guasti} fermi` : 'Nessun guasto', segnale: guasti ? `${guasti} ${guasti === 1 ? 'fermo' : 'fermi'}` : '' },
@@ -168,6 +178,7 @@
     const slug = x => String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const META = {
       'Cantieri': { c: 'blu', ico: 'cantieri', vai: 'cantieri', rias: `${cantieri.length} aperti${oltreBudget ? ` · ${oltreBudget} oltre il budget` : ''}${ritardo ? ` · ${ritardo} attività in ritardo` : ''}` },
+      'Assistente IA': { c: 'viola', ico: 'stella', vai: 'assistente', apriTesto: "Apri l'assistente", rias: ia.length ? `${ia.length} ${ia.length === 1 ? 'proposta' : 'proposte'} da approvare${squadreDaFare ? ' · squadre della prossima settimana' : ''}` : 'Niente da decidere' },
       'Presenze e mezzi': { c: 'verde', ico: 'orologio', vai: 'presenze', rias: `${dentro} in cantiere ora · ${impegnati}/${mezzi.length} mezzi impegnati${guasti ? ` · ${guasti} fermi` : ''}` },
       'Offerte': { c: 'arancio', ico: 'preventivo', vai: 'preventivi', rias: prev.length ? `${prev.length} offerte in attesa di risposta` : 'Nessuna offerta in sospeso' },
       'Contabilità': { c: 'rosso', ico: 'calendario', vai: 'contabilita', rias: `${euroBreve(daIncassare)} da incassare · ${daPagare} fatture da pagare${creditiScaduti ? ` · ${creditiScaduti} incassi scaduti` : ''}` },
@@ -213,7 +224,7 @@
         return `<section class="hs ${m.c} ${problemi ? 'allarme' : ''} ${s.nascosta ? 'nascosta' : ''}" aria-labelledby="hs-t-${k}" data-k="${k}">
           <header class="hs-testa"><span class="hs-ico" aria-hidden="true">${ico(m.ico)}</span><div class="hs-tit"><h2 id="hs-t-${k}">${esc(titolo)}</h2>${m.rias ? `<p>${esc(m.rias)}</p>` : ''}</div>
             ${problemi ? `<span class="hs-stato rosso"><i></i>${problemi} da sistemare</span>` : attenzioni ? `<span class="hs-stato giallo"><i></i>${attenzioni} da controllare</span>` : g ? '<span class="hs-stato verde"><i></i>tutto a posto</span>' : ''}
-            ${m.vai && !modifica ? `<a class="hs-apri" href="#${m.vai}">Apri ${esc(titolo.toLowerCase())} <span aria-hidden="true">→</span></a>` : ''}${comandi}</header>
+            ${m.vai && !modifica ? `<a class="hs-apri" href="#${m.vai}">${m.apriTesto ? esc(m.apriTesto) : `Apri ${esc(titolo.toLowerCase())}`} <span aria-hidden="true">→</span></a>` : ''}${comandi}</header>
           ${corpo}</section>`;
       }).join('');
       el.innerHTML = `<div class="t-saluto"><div><div class="nota">${esc(fmt.dataLunga(oggi).replace(/^./, c => c.toUpperCase()))}</div>

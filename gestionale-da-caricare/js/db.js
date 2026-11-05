@@ -157,6 +157,14 @@
       const { dati } = await chiama(`/rest/v1/rpc/${funzione}`, { metodo: 'POST', corpo: argomenti });
       return dati;
     },
+    // Funzioni sul server di Supabase (es. lettura dei documenti con l'IA: la chiave resta sul server)
+    async funzione(nome, corpo = {}) {
+      const r = await chiama(`/functions/v1/${nome}`, { metodo: 'POST', corpo, grezzo: true });
+      const testo = await r.text(); let d = null; try { d = JSON.parse(testo); } catch {}
+      if (r.status === 404) throw new ErroreDb(`La funzione "${nome}" non è ancora attiva su Supabase: va pubblicata una volta (vedi le istruzioni).`, 'funzione');
+      if (!r.ok) throw new ErroreDb((d && (d.message || d.error || d.msg)) || `Errore ${r.status}`, 'funzione');
+      return d;
+    },
 
     // ---------- File (cartella privata "documenti") ----------
     async caricaFile(percorso, file) {

@@ -163,12 +163,15 @@
         }
         [anag] = await Promise.all([db.lista('anagrafiche', { sel: 'id,tipo,ragione_sociale,piva,codice_fiscale' })]);
         const numeri = [...new Set(righe.map(r => r.numero))];
-        const esistenti = numeri.length ? await db.lista('fatture', { in: { numero: numeri }, sel: 'tipo,numero,data,anagrafica:anagrafiche(piva,codice_fiscale)' }) : [];
+        const esistenti = numeri.length ? await db.lista('fatture', { in: { numero: numeri }, sel: 'id,tipo,numero,data,cortesia,anagrafica:anagrafiche(piva,codice_fiscale)' }) : [];
         for (const r of righe) {
           const pi = soloCifre(r.controparte.piva), cf = (r.controparte.cf || '').toUpperCase();
           r.anagrafica = anag.find(a => (pi && soloCifre(a.piva) === pi) || (cf && (a.codice_fiscale || '').toUpperCase() === cf)) || null;
-          r.doppia = esistenti.some(f => f.tipo === r.tipo && f.numero === r.numero && f.data.slice(0, 4) === r.data.slice(0, 4) &&
+          const uguale = esistenti.find(f => f.tipo === r.tipo && f.numero === r.numero && f.data.slice(0, 4) === r.data.slice(0, 4) &&
             f.anagrafica && ((pi && soloCifre(f.anagrafica.piva) === pi) || (cf && (f.anagrafica.codice_fiscale || '').toUpperCase() === cf)));
+          // una copia di cortesia già registrata viene sostituita dalla fattura elettronica
+          r.cortesiaId = uguale && uguale.cortesia ? uguale.id : null;
+          r.doppia = !!uguale && !r.cortesiaId;
           r.scelta = !r.doppia;
         }
         righe.sort((a, b) => a.data.localeCompare(b.data));
@@ -182,7 +185,7 @@
               <td><input type="checkbox" data-i="${i}" ${r.scelta ? 'checked' : ''} ${r.doppia ? 'disabled' : ''} aria-label="Importa fattura ${esc(r.numero)}"></td>
               <td>${r.tipo === 'emessa' ? 'emessa' : 'ricevuta'}${r.notaCredito ? '<br><span class="stato giallo">nota di credito</span>' : ''}</td>
               <td><b>${esc(r.numero)}</b></td><td>${fmt.data(r.data)}</td>
-              <td>${esc(r.controparte.nome)}<br><span class="nota">${r.anagrafica ? 'già in anagrafica' : 'verrà aggiunto'}${r.controparte.piva ? ' – P.IVA ' + esc(r.controparte.piva) : ''}</span></td>
+              <td>${esc(r.controparte.nome)}${r.cortesiaId ? ' <span class="stato giallo">sostituisce la copia di cortesia</span>' : ''}<br><span class="nota">${r.anagrafica ? 'già in anagrafica' : 'verrà aggiunto'}${r.controparte.piva ? ' – P.IVA ' + esc(r.controparte.piva) : ''}</span></td>
               <td class="num">${fmt.euro(r.imponibile)}</td><td class="num">${fmt.euro(r.totale)}${r.regime !== 'ordinario' ? `<br><span class="nota">${esc(r.regime)}</span>` : ''}</td>
               <td>${fmt.data(r.scadenza)}${r.rate > 1 ? `<br><span class="nota">${r.rate} rate</span>` : ''}</td><td>${esc(r.metodo_pagamento)}</td>
               <td><select data-cant="${i}" style="min-width:190px" aria-label="Cantiere" ${r.doppia ? 'disabled' : ''}>${opzC}</select></td>
@@ -214,6 +217,11 @@
           }
           const cant = w.el.querySelector(`[data-cant="${i}"]`).value, voce = w.el.querySelector(`[data-voce="${i}"]`);
           const note = [r.aliquoteMiste ? 'Fattura con più aliquote IVA: aliquota media calcolata.' : '', r.rate > 1 ? `Pagamento in ${r.rate} rate, prima scadenza indicata.` : '', `Importata dal file ${r.file}`].filter(Boolean).join(' ');
+          if (r.cortesiaId) {
+            await db.aggiorna('fatture', r.cortesiaId, { data: r.data, imponibile: r.imponibile, iva_pct: r.iva_pct, regime: r.regime, scadenza: r.scadenza, metodo_pagamento: r.metodo_pagamento, iban: r.iban, origine: 'xml', cortesia: false,
+              ...(cant ? { cantiere_id: Number(cant) } : {}), ...(voce && voce.value ? { categoria: voce.value } : {}) });
+            r.scelta = false; r.doppia = true; fatte++; continue;
+          }
           await db.inserisci('fatture', {
             tipo: r.tipo, numero: r.numero, data: r.data, anagrafica_id: a.id, cantiere_id: cant ? Number(cant) : null, descrizione: r.descrizione,
             categoria: voce ? voce.value : '', imponibile: r.imponibile, iva_pct: r.iva_pct, regime: r.regime, scadenza: r.scadenza,

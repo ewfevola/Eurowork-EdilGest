@@ -819,6 +819,79 @@ $$;
 revoke all on function public.salva_preferenze(jsonb) from public, anon;
 grant execute on function public.salva_preferenze(jsonb) to authenticated;
 
+-- ---------- Fatture: CIG, CUP, offerta collegata, copia di cortesia ----------
+alter table public.fatture add column if not exists cig            text not null default '';
+alter table public.fatture add column if not exists cup            text not null default '';
+alter table public.fatture add column if not exists preventivo_id  bigint references public.preventivi(id) on delete set null;
+alter table public.fatture add column if not exists rif_preventivo text not null default '';
+alter table public.fatture add column if not exists cortesia       boolean not null default false;
+create index if not exists fatture_preventivo on public.fatture(preventivo_id);
+
+-- ---------- Dipendenti: competenze e ore settimanali ----------
+alter table public.lavoratori add column if not exists competenze      text not null default '';
+alter table public.lavoratori add column if not exists ore_settimanali numeric(5,1) not null default 40;
+
+-- ---------- Assistente: cosa serve in ogni cantiere (se lo correggi a mano) ----------
+create table if not exists public.squadre_richieste (
+  id           bigint generated always as identity primary key,
+  settimana    date not null,                 -- il lunedì della settimana
+  cantiere_id  bigint not null references public.cantieri(id) on delete cascade,
+  persone      int not null default 0 check (persone >= 0),
+  competenze   text not null default '',
+  serve_capo   boolean not null default true,
+  note         text not null default '',
+  unique (settimana, cantiere_id)
+);
+
+-- ---------- Assistente: piano squadre approvato ----------
+create table if not exists public.piano_squadre (
+  id                 bigint generated always as identity primary key,
+  settimana          date not null,
+  cantiere_id        bigint not null references public.cantieri(id) on delete cascade,
+  lavoratore_id      bigint not null references public.lavoratori(id) on delete cascade,
+  bloccato           boolean not null default false,   -- scelta fatta a mano
+  km                 int,
+  motivazione        text not null default '',
+  approvato_da       uuid references public.profili(id) default auth.uid(),
+  approvato_da_nome  text not null default '',
+  approvato_il       timestamptz not null default now(),
+  unique (settimana, lavoratore_id)
+);
+create index if not exists piano_squadre_sett on public.piano_squadre(settimana);
+
+-- ---------- Assistente: registro delle decisioni ----------
+create table if not exists public.registro_ia (
+  id         bigint generated always as identity primary key,
+  creato_il  timestamptz not null default now(),
+  utente_id  uuid references public.profili(id) default auth.uid(),
+  utente     text not null default '',
+  tipo       text not null default '',
+  oggetto    text not null default '',
+  esito      text not null default '',
+  dettaglio  text not null default ''
+);
+
+-- ---------- Permessi: solo l'ufficio ----------
+do $$
+declare t text;
+begin
+  foreach t in array array['squadre_richieste','piano_squadre','registro_ia']
+  loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "ufficio" on public.%I', t);
+    execute format('create policy "ufficio" on public.%I for all to authenticated using (public.is_admin()) with check (public.is_admin())', t);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
+  end loop;
+end $$;
+
+-- Il registro non si modifica né si cancella: resta come traccia.
+drop policy if exists "ufficio" on public.registro_ia;
+drop policy if exists "ufficio legge" on public.registro_ia;
+drop policy if exists "ufficio scrive" on public.registro_ia;
+create policy "ufficio legge"  on public.registro_ia for select to authenticated using (public.is_admin());
+create policy "ufficio scrive" on public.registro_ia for insert to authenticated with check (public.is_admin() and utente_id = auth.uid());
+revoke update, delete on public.registro_ia from authenticated;
+
 -- ---------- Primo amministratore -------------------------------------
 -- Dopo aver creato il tuo utente in Authentication → Users, esegui da sola
 -- questa riga con la tua email:
