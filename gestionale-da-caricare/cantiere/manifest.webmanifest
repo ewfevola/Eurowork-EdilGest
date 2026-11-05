@@ -1,0 +1,17 @@
+{
+  "name": "Eurowork Cantiere",
+  "short_name": "Cantiere",
+  "description": "App di cantiere EUROWORK: presenze, mezzi, giornale dei lavori, foto e documenti, collegata al gestionale EdilGest.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "icons": [
+    { "src": "icone/icona-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icone/icona-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icone/icona-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
