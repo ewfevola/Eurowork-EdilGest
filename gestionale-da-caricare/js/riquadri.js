@@ -127,7 +127,7 @@
         { d: 'medio', c: 'teal', t: 'Foto e documenti', ico: 'foto', vai: 'documenti' }] }
     ] : [
       { g: 'Cantieri', tessere: [
-        { d: 'grande', c: 'blu', t: 'Cantieri', ico: 'cantieri', vai: 'cantieri', vivo: cantieri.length, sotto: 'aperti', sem: oltreBudget || inPerdita ? 'rosso' : 'verde', semTesto: oltreBudget || inPerdita ? `${oltreBudget} oltre il budget, ${inPerdita} con costi sopra il fatturato` : 'Tutti entro il budget', segnale: oltreBudget ? `${oltreBudget} oltre il budget` : '' },
+        { d: 'grande', c: 'blu', t: 'Cantieri', ico: 'cantieri', vai: 'cantieri', vivo: cantieri.length, sotto: 'aperti', sem: oltreBudget || inPerdita ? 'rosso' : 'verde', semTesto: oltreBudget || inPerdita ? [oltreBudget ? `${oltreBudget} oltre il budget` : '', inPerdita ? `${inPerdita} con costi sopra il fatturato` : ''].filter(Boolean).join(', ') : 'Tutti entro il budget', segnale: oltreBudget ? `${oltreBudget} oltre il budget` : '' },
         { d: 'medio', c: 'blu-2', t: 'Giornale lavori', ico: 'giornale', vai: 'giornale', vivo: senzaGiornale || null, sotto: senzaGiornale ? 'da compilare oggi' : 'tutti compilati', sem: !senzaGiornale ? 'verde' : oraAdesso >= 15 ? 'rosso' : 'giallo', barra: cantieri.length ? (cantieri.length - senzaGiornale) / cantieri.length * 100 : null },
         { d: 'medio', c: 'teal', t: 'Cronoprogramma', ico: 'gantt', vai: 'cronoprogramma', vivo: inCorso || null, sotto: inCorso ? 'attività in corso' : '', sem: ritardo ? 'rosso' : 'verde', semTesto: ritardo ? `${ritardo} attività in ritardo` : 'Nessun ritardo', segnale: ritardo ? `${ritardo} in ritardo` : '' },
         { d: 'piccolo', t: 'Nuovo cantiere', ico: 'piu', azione: 'nuovoCantiere' },
@@ -164,17 +164,112 @@
     if (senzaGiornale) cose.push(`${senzaGiornale} ${senzaGiornale === 1 ? 'giornale' : 'giornali'} di cantiere da compilare`);
     const frase = cose.length ? `Oggi ci sono ${cose.length > 1 ? cose.slice(0, -1).join(', ') + ' e ' + cose[cose.length - 1] : cose[0]}.` : 'Nessuna urgenza per oggi.';
 
-    let i = 0;
-    el.innerHTML = `<div class="t-saluto"><div><div class="nota">${esc(fmt.dataLunga(oggi).replace(/^./, c => c.toUpperCase()))}</div>
-        <h1>${saluto}${nome ? ', ' + esc(nome) : ''}</h1><p>${esc(frase)}</p></div></div>
-      <div class="lanciatore-box"><div class="lanciatore">${gruppi.map(g => `<section class="gruppo-t" aria-label="${esc(g.g)}"><h2>${esc(g.g)}</h2><div class="tessere">${g.tessere.map(t => tessera(t, i++)).join('')}</div></section>`).join('')}</div></div>
-      ${capo ? '' : `<div class="t-andamento"><h2>Andamento dei cantieri</h2><div class="scorri pannello"><table class="tabella"><thead><tr><th>Cantiere</th><th>Stato</th><th class="num">Contratto</th><th class="num">Fatturato</th><th class="num">Costi</th><th class="num">Margine attuale</th><th class="num">Avanzamento</th></tr></thead><tbody>${
+    // ---------- Sezioni della home: intestazione, riassunto, cosa è importante ----------
+    const slug = x => String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const META = {
+      'Cantieri': { c: 'blu', ico: 'cantieri', vai: 'cantieri', rias: `${cantieri.length} aperti${oltreBudget ? ` · ${oltreBudget} oltre il budget` : ''}${ritardo ? ` · ${ritardo} attività in ritardo` : ''}` },
+      'Presenze e mezzi': { c: 'verde', ico: 'orologio', vai: 'presenze', rias: `${dentro} in cantiere ora · ${impegnati}/${mezzi.length} mezzi impegnati${guasti ? ` · ${guasti} fermi` : ''}` },
+      'Offerte': { c: 'arancio', ico: 'preventivo', vai: 'preventivi', rias: prev.length ? `${prev.length} offerte in attesa di risposta` : 'Nessuna offerta in sospeso' },
+      'Contabilità': { c: 'rosso', ico: 'calendario', vai: 'contabilita', rias: `${euroBreve(daIncassare)} da incassare · ${daPagare} fatture da pagare${creditiScaduti ? ` · ${creditiScaduti} incassi scaduti` : ''}` },
+      'Personale': { c: 'bordeaux', ico: 'persone', vai: 'personale', rias: `${lav.length} dipendenti in forza${docScad ? ` · ${docScad} documenti scaduti` : ''}${urgenti.length ? ` · ${urgenti.length} scadenze` : ''}` },
+      'Il mio lavoro': { c: 'verde', ico: 'orologio', vai: 'presenze', rias: `${dentro} in cantiere ora${senzaGiornale ? ` · ${senzaGiornale} giornali da compilare` : ''}` }
+    };
+    gruppi.forEach(g => { g.id = slug(g.g); g.tessere.forEach(t => { t.id = slug(t.t); }); });
+    const tutte = Object.fromEntries(gruppi.flatMap(g => g.tessere.map(t => [t.id, t])));
+    const SEZ_EXTRA = capo ? [] : [{ id: 'andamento', g: 'Andamento dei cantieri', tabella: true }];
+    const predefinito = () => ({ sezioni: [...gruppi.map(g => ({ id: g.id, tessere: g.tessere.map(t => ({ id: t.id, d: t.d })) })), ...SEZ_EXTRA.map(x => ({ id: x.id, tessere: [] }))], evidenza: true });
+    const chiave = 'home-layout-' + (App.profilo.id || 'io') + (capo ? '-capo' : '');
+    const leggiLayout = () => {
+      let L = null; try { L = (App.profilo.preferenze && App.profilo.preferenze.home) || JSON.parse(localStorage.getItem(chiave) || 'null'); } catch {}
+      const def = predefinito(); if (!L || !Array.isArray(L.sezioni)) return def;
+      const note = new Set(); const sezioni = [];
+      for (const s of L.sezioni) { const g = gruppi.find(x => x.id === s.id) || SEZ_EXTRA.find(x => x.id === s.id); if (!g) continue;
+        sezioni.push({ id: s.id, nascosta: !!s.nascosta, tessere: (s.tessere || []).filter(t => tutte[t.id] && !note.has(t.id) && note.add(t.id)).map(t => ({ id: t.id, d: ['grande', 'medio', 'piccolo'].includes(t.d) ? t.d : tutte[t.id].d, nascosta: !!t.nascosta })) }); }
+      for (const d of def.sezioni) { let s = sezioni.find(x => x.id === d.id); if (!s) { s = { id: d.id, tessere: [] }; sezioni.push(s); } for (const t of d.tessere) if (!note.has(t.id)) { note.add(t.id); s.tessere.push(t); } }
+      return { sezioni, evidenza: L.evidenza !== false };
+    };
+    const salvaLayout = async L => {
+      try { localStorage.setItem(chiave, JSON.stringify(L)); } catch {}
+      try { await db.rpc('salva_preferenze', { p: { ...(App.profilo.preferenze || {}), home: L } }); App.profilo.preferenze = { ...(App.profilo.preferenze || {}), home: L }; } catch {}
+    };
+    let layout = leggiLayout(), modifica = false;
+
+    // le cose da guardare subito: tutte le piastrelle con semaforo rosso o giallo
+    const evidenze = () => gruppi.flatMap(g => g.tessere.filter(t => t.sem === 'rosso' || t.sem === 'giallo').map(t => ({ t, g }))).sort((a, b) => (a.t.sem === 'rosso' ? 0 : 1) - (b.t.sem === 'rosso' ? 0 : 1));
+
+    function disegna() {
+      let i = 0;
+      const ev = evidenze(), rossi = ev.filter(x => x.t.sem === 'rosso').length;
+      const sezHtml = layout.sezioni.map((s, k) => {
+        if (s.nascosta && !modifica) return '';
+        const extra = SEZ_EXTRA.find(x => x.id === s.id), g = gruppi.find(x => x.id === s.id);
+        const titolo = extra ? extra.g : g.g, m = META[titolo] || { c: 'ardesia', ico: 'griglia', rias: '' };
+        const problemi = g ? g.tessere.filter(t => t.sem === 'rosso').length : 0, attenzioni = g ? g.tessere.filter(t => t.sem === 'giallo').length : 0;
+        const comandi = modifica ? `<div class="hs-comandi"><button type="button" class="hs-cmd" data-su="${k}" ${k ? '' : 'disabled'} aria-label="Sposta su la sezione ${esc(titolo)}">▲</button><button type="button" class="hs-cmd" data-giu="${k}" ${k < layout.sezioni.length - 1 ? '' : 'disabled'} aria-label="Sposta giù la sezione ${esc(titolo)}">▼</button><button type="button" class="hs-cmd lungo" data-nascondi-sez="${k}">${s.nascosta ? 'Mostra' : 'Nascondi'}</button></div>` : '';
+        const corpo = extra ? (modifica ? '<p class="nota">La tabella con contratto, fatturato, costi e margine di ogni cantiere aperto.</p>' : andamento())
+          : `<div class="hs-tessere" data-sez="${k}">${s.tessere.map((ts, j) => { const t = tutte[ts.id]; if (ts.nascosta && !modifica) return '';
+              const html = tessera({ ...t, d: ts.d }, i++);
+              return modifica ? `<div class="hs-mod ${ts.d} ${ts.nascosta ? 'spenta' : ''}" draggable="true" data-sez="${k}" data-pos="${j}">${html}<div class="hs-mod-barra"><span class="hs-maniglia" aria-hidden="true">⠿</span><button type="button" data-sx aria-label="Sposta prima ${esc(t.t)}">‹</button><button type="button" data-dx aria-label="Sposta dopo ${esc(t.t)}">›</button><button type="button" data-dim aria-label="Cambia dimensione di ${esc(t.t)}">${ts.d === 'grande' ? 'G' : ts.d === 'medio' ? 'M' : 'P'}</button><button type="button" data-occhio aria-label="${ts.nascosta ? 'Mostra' : 'Nascondi'} ${esc(t.t)}">${ts.nascosta ? '◌' : '●'}</button></div></div>` : html; }).join('')}</div>`;
+        return `<section class="hs ${m.c} ${problemi ? 'allarme' : ''} ${s.nascosta ? 'nascosta' : ''}" aria-labelledby="hs-t-${k}" data-k="${k}">
+          <header class="hs-testa"><span class="hs-ico" aria-hidden="true">${ico(m.ico)}</span><div class="hs-tit"><h2 id="hs-t-${k}">${esc(titolo)}</h2>${m.rias ? `<p>${esc(m.rias)}</p>` : ''}</div>
+            ${problemi ? `<span class="hs-stato rosso"><i></i>${problemi} da sistemare</span>` : attenzioni ? `<span class="hs-stato giallo"><i></i>${attenzioni} da controllare</span>` : g ? '<span class="hs-stato verde"><i></i>tutto a posto</span>' : ''}
+            ${m.vai && !modifica ? `<a class="hs-apri" href="#${m.vai}">Apri ${esc(titolo.toLowerCase())} <span aria-hidden="true">→</span></a>` : ''}${comandi}</header>
+          ${corpo}</section>`;
+      }).join('');
+      el.innerHTML = `<div class="t-saluto"><div><div class="nota">${esc(fmt.dataLunga(oggi).replace(/^./, c => c.toUpperCase()))}</div>
+          <h1>${saluto}${nome ? ', ' + esc(nome) : ''}</h1><p>${esc(frase)}</p></div>
+          <div class="azioni">${modifica ? '<button class="btn testo" id="h-ripristina">Ripristina come all\'inizio</button><button class="btn rosso" id="h-fatto">Fatto</button>' : '<button class="btn vuoto" id="h-pers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>Personalizza la home</button>'}</div></div>
+        ${modifica ? `<div class="hs-guida" role="status"><b>Stai personalizzando la home.</b> Trascina i riquadri per spostarli (anche in un'altra sezione) oppure usa ‹ ›. <b>P M G</b> cambia la dimensione, <b>●</b> nasconde. Con ▲ ▼ sposti le sezioni. Le scelte valgono solo per te. <label class="spunta"><input type="checkbox" id="h-ev" ${layout.evidenza ? 'checked' : ''}> Mostra "Da guardare subito"</label></div>` : ''}
+        ${layout.evidenza && ev.length && !modifica ? `<section class="hs-evidenza ${rossi ? 'rosso' : 'giallo'}" aria-labelledby="hs-ev"><h2 id="hs-ev"><span class="hs-pulsa" aria-hidden="true"></span>Da guardare subito <small>${rossi ? `${rossi} da sistemare` : ''}${rossi && ev.length > rossi ? ' · ' : ''}${ev.length > rossi ? `${ev.length - rossi} da controllare` : ''}</small></h2>
+          <div class="hs-ev-lista">${ev.map(({ t, g }) => `<button type="button" class="hs-ev ${t.sem}" data-ev="${t.id}"><i aria-hidden="true"></i><span><b>${esc(t.t)}</b><small>${esc(t.segnale || t.semTesto || (t.vivo != null ? `${t.vivo} ${t.sotto || ''}` : ''))}</small></span><em>${esc(g.g)}</em></button>`).join('')}</div></section>` : ''}
+        <div class="hs-lista ${modifica ? 'in-modifica' : ''}">${sezHtml}</div>`;
+      collega();
+    }
+    function andamento() {
+      return `<div class="scorri"><table class="tabella"><thead><tr><th>Cantiere</th><th>Stato</th><th class="num">Contratto</th><th class="num">Fatturato</th><th class="num">Costi</th><th class="num">Margine attuale</th><th class="num">Avanzamento</th></tr></thead><tbody>${
         econ.map(c => { const m = c.fatturato - c.costi_totali, av = c.importo_contratto ? c.fatturato / c.importo_contratto * 100 : null;
           const bu = budgetDi(c.cantiere_id), col = (bu && c.costi_totali > bu) || m < 0 ? 'rosso' : bu && c.costi_totali > bu * 0.9 ? 'giallo' : 'verde';
           return `<tr class="cliccabile" data-c="${c.cantiere_id}" tabindex="0"><td><span class="sem-p ${col}" role="img" aria-label="${col === 'rosso' ? 'da sistemare' : col === 'giallo' ? 'da controllare' : 'a posto'}"></span><b>${esc(c.nome)}</b></td><td>${App.statoCantiere(c.stato)}</td><td class="num">${fmt.euro(c.importo_contratto)}</td><td class="num">${fmt.euro(c.fatturato)}</td><td class="num">${fmt.euro(c.costi_totali)}</td><td class="num" style="${m < 0 ? 'color:var(--t-rosso);font-weight:600' : ''}">${fmt.euro(m)}</td><td class="num">${fmt.pct(av)}</td></tr>`; }).join('')
-        || '<tr><td class="vuota" colspan="7">Nessun cantiere aperto.</td></tr>'}</tbody></table></div></div>`}`;
-    el.querySelectorAll('[data-azione]').forEach(b => b.onclick = () => AZIONI[b.dataset.azione]());
-    const tab = el.querySelector('.t-andamento table');
-    if (tab) tab.addEventListener('click', e => { const tr = e.target.closest('[data-c]'); if (tr) ui.vai('cantiere', tr.dataset.c); });
+        || '<tr><td class="vuota" colspan="7">Nessun cantiere aperto.</td></tr>'}</tbody></table></div>`;
+    }
+    function collega() {
+      const avvia = t => { if (t.vai) location.hash = t.vai; else AZIONI[t.azione](); };
+      if (!modifica) {
+        el.querySelectorAll('[data-azione]').forEach(b => b.onclick = () => AZIONI[b.dataset.azione]());
+        el.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => avvia(tutte[b.dataset.ev]));
+        el.querySelectorAll('.hs table').forEach(tab => tab.addEventListener('click', e => { const tr = e.target.closest('[data-c]'); if (tr) ui.vai('cantiere', tr.dataset.c); }));
+        $('#h-pers', el).onclick = () => { modifica = true; disegna(); };
+        return;
+      }
+      const ridisegna = () => { const y = scrollY; disegna(); scrollTo(0, y); };
+      // in modifica i riquadri non aprono niente
+      el.querySelectorAll('.hs-mod .tessera').forEach(a => { a.addEventListener('click', e => e.preventDefault()); a.setAttribute('tabindex', '-1'); });
+      $('#h-fatto', el).onclick = async () => { modifica = false; await salvaLayout(layout); avviso('Home salvata'); disegna(); };
+      $('#h-ripristina', el).onclick = () => { layout = predefinito(); ridisegna(); };
+      $('#h-ev', el).onchange = e => { layout.evidenza = e.target.checked; };
+      const sposta = (arr, da, a) => { const [x] = arr.splice(da, 1); arr.splice(a, 0, x); };
+      el.querySelectorAll('[data-su]').forEach(b => b.onclick = () => { const k = +b.dataset.su; sposta(layout.sezioni, k, k - 1); ridisegna(); });
+      el.querySelectorAll('[data-giu]').forEach(b => b.onclick = () => { const k = +b.dataset.giu; sposta(layout.sezioni, k, k + 1); ridisegna(); });
+      el.querySelectorAll('[data-nascondi-sez]').forEach(b => b.onclick = () => { const s = layout.sezioni[+b.dataset.nascondiSez]; s.nascosta = !s.nascosta; ridisegna(); });
+      el.querySelectorAll('.hs-mod').forEach(box => {
+        const s = layout.sezioni[+box.dataset.sez], j = +box.dataset.pos, ts = s.tessere[j];
+        box.querySelector('[data-sx]').onclick = () => { if (j > 0) { sposta(s.tessere, j, j - 1); ridisegna(); } };
+        box.querySelector('[data-dx]').onclick = () => { if (j < s.tessere.length - 1) { sposta(s.tessere, j, j + 1); ridisegna(); } };
+        box.querySelector('[data-dim]').onclick = () => { ts.d = { piccolo: 'medio', medio: 'grande', grande: 'piccolo' }[ts.d]; ridisegna(); };
+        box.querySelector('[data-occhio]').onclick = () => { ts.nascosta = !ts.nascosta; ridisegna(); };
+        box.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', `${box.dataset.sez},${j}`); e.dataTransfer.effectAllowed = 'move'; box.classList.add('trascina'); });
+        box.addEventListener('dragend', () => box.classList.remove('trascina'));
+        box.addEventListener('dragover', e => { e.preventDefault(); box.classList.add('sopra'); });
+        box.addEventListener('dragleave', () => box.classList.remove('sopra'));
+        box.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); const [sk, sj] = e.dataTransfer.getData('text/plain').split(',').map(Number); const da = layout.sezioni[sk]; if (!da) return;
+          const [x] = da.tessere.splice(sj, 1); let pos = j; if (da === s && sj < j) pos--; s.tessere.splice(pos + (da === s && sj < j ? 1 : 0), 0, x); ridisegna(); });
+      });
+      // rilascio nello spazio vuoto di una sezione: in fondo
+      el.querySelectorAll('.hs-tessere').forEach(z => {
+        z.addEventListener('dragover', e => e.preventDefault());
+        z.addEventListener('drop', e => { e.preventDefault(); const [sk, sj] = e.dataTransfer.getData('text/plain').split(',').map(Number); const da = layout.sezioni[sk], a = layout.sezioni[+z.dataset.sez]; if (!da || !a) return; const [x] = da.tessere.splice(sj, 1); a.tessere.push(x); ridisegna(); });
+      });
+    }
+    disegna();
   });
 })();

@@ -74,7 +74,7 @@
     if (document.hidden) return;
     aggiorna();
     const nome = ui.letturaHash().nome || 'home', att = document.activeElement;
-    if (['home', 'cantieri'].includes(nome) && !document.querySelector('.velo') && !(att && att.matches('input,select,textarea'))) {
+    if (['home', 'cantieri'].includes(nome) && !document.querySelector('.velo, .in-modifica') && !(att && att.matches('input,select,textarea'))) {
       document.body.classList.add('vv-quieto'); Promise.resolve(ui.pagine[nome]($('#contenuto'))).finally(() => setTimeout(() => document.body.classList.remove('vv-quieto'), 400));
     }
   }, 60000);

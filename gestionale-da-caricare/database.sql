@@ -807,6 +807,18 @@ create policy "capi leggono" on public.attivita for select to authenticated usin
 -- cartella privata "documenti" (sottocartella lavoratori/), già protetta:
 -- li può aprire solo l'ufficio.
 
+-- ---------- Home personalizzabile ----------
+alter table public.profili add column if not exists preferenze jsonb not null default '{}'::jsonb;
+
+-- Ogni utente può cambiare SOLO le sue preferenze (non il ruolo né lo stato):
+-- per questo passa da una funzione e non da una modifica diretta del profilo.
+create or replace function public.salva_preferenze(p jsonb)
+returns void language sql security definer set search_path = public as $$
+  update public.profili set preferenze = coalesce(p, '{}'::jsonb) where id = auth.uid();
+$$;
+revoke all on function public.salva_preferenze(jsonb) from public, anon;
+grant execute on function public.salva_preferenze(jsonb) to authenticated;
+
 -- ---------- Primo amministratore -------------------------------------
 -- Dopo aver creato il tuo utente in Authentication → Users, esegui da sola
 -- questa riga con la tua email:

@@ -631,3 +631,87 @@ kbd{font:600 .72rem/1 Barlow,system-ui,sans-serif;padding:3px 5px;border:1px sol
 .cm-cerca svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 @media (max-width:1400px) and (min-width:901px){.t-sezione{display:none}.t-cerca kbd{display:none}}
 @media (max-width:1250px){.vv-barra{display:none}}
+/* ---------- Caratteri più evidenti ---------- */
+.testata h1{font:700 clamp(1.7rem,1.3rem + 1vw,2.3rem)/1.1 "Barlow Semi Condensed",Barlow,system-ui,sans-serif;letter-spacing:.005em}
+.testata h1::before{width:14px}
+.pannello h2,.testata h2,.sezione>h2{font:700 1.3rem/1.2 "Barlow Semi Condensed",Barlow,system-ui,sans-serif}
+.schede button{font:600 1rem/1.2 Barlow,system-ui,sans-serif;padding:11px 18px}
+.schede button[aria-selected=true]{font-weight:700}
+.tabella th{font-weight:700;letter-spacing:.01em}
+@media (min-width:901px){
+  .t-sezione{font:700 1.2rem "Barlow Semi Condensed",Barlow,system-ui,sans-serif;color:var(--testo)}
+  .menu-voci .gruppo{font:700 .82rem/1.2 Barlow,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--testo-2);border-bottom:2px solid var(--linea-forte);margin-bottom:4px}
+  .menu-voci a{font-weight:500}
+}
+.tessera .etichetta{font-weight:600;font-size:1.02rem}
+.tessera.piccolo .etichetta{font-size:.9rem}
+
+/* ---------- Home a sezioni, che scorre in verticale ---------- */
+.t-saluto .azioni .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;margin-right:6px;vertical-align:-3px}
+.t-saluto h1{font:700 clamp(2rem,1.5rem + 1.4vw,2.8rem)/1.05 "Barlow Semi Condensed",Barlow,system-ui,sans-serif}
+.hs-lista{display:flex;flex-direction:column;gap:28px}
+.hs{--hs:var(--t-ardesia);background:var(--superficie);border:1px solid var(--linea);border-top:6px solid var(--hs);padding:0 0 20px}
+.hs.blu{--hs:var(--t-blu)}.hs.verde{--hs:var(--t-verde)}.hs.arancio{--hs:var(--t-arancio)}.hs.rosso{--hs:var(--t-rosso)}.hs.bordeaux{--hs:var(--t-bordeaux)}.hs.teal{--hs:var(--t-teal)}
+.hs.allarme{box-shadow:inset 6px 0 0 var(--t-rosso)}
+.hs.nascosta{opacity:.5}
+.hs-testa{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 22px 14px;border-bottom:1px solid var(--linea);margin-bottom:18px}
+.hs-ico{display:grid;place-items:center;width:52px;height:52px;flex:none;background:var(--hs);color:#fff}
+.hs.arancio .hs-ico{color:#1d1d1d}
+.hs-ico svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.hs-tit{flex:1 1 260px;min-width:0}
+.hs-tit h2{font:700 clamp(1.5rem,1.2rem + .8vw,2rem)/1.05 "Barlow Semi Condensed",Barlow,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.03em;color:var(--testo)}
+.hs-tit p{margin-top:4px;color:var(--testo-2);font-size:.98rem}
+.hs-stato{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:.9rem;padding:6px 12px;background:var(--superficie-2);white-space:nowrap}
+.hs-stato i{width:10px;height:10px;border-radius:50%;background:#2fb35d}
+.hs-stato.rosso{background:color-mix(in srgb,var(--t-rosso) 14%,var(--superficie));color:var(--t-rosso)}.hs-stato.rosso i{background:#e0382f;animation:vv-pulsa 2s infinite}
+.hs-stato.giallo{background:color-mix(in srgb,var(--t-arancio) 18%,var(--superficie))}.hs-stato.giallo i{background:#f2b01e}
+.hs-apri{font-weight:700;color:var(--testo);text-decoration:none;padding:8px 14px;border:2px solid var(--hs);white-space:nowrap}
+.hs-apri:hover{background:var(--hs);color:#fff}
+.hs.arancio .hs-apri:hover{color:#1d1d1d}
+.hs-tessere{--u:clamp(130px,11vw,175px);display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--u),1fr));grid-auto-rows:var(--u);grid-auto-flow:dense;gap:8px;padding:0 22px}
+.hs-tessere>.tessera,.hs-tessere>.hs-mod{grid-column:span 1;grid-row:span 1}
+.hs-tessere>.grande{grid-column:span 2;grid-row:span 2}
+.hs-tessere>.medio{grid-column:span 2;grid-row:span 1}
+.hs-tessere .tessera{aspect-ratio:auto;height:100%;width:100%}
+.hs-tessere .tessera.grande .vivo{font-size:3.2rem}
+.hs-tessere .tessera.grande .etichetta{font-size:1.25rem;font-weight:700}
+.hs-tessere .tessera.medio .etichetta{font-size:1.08rem}
+.hs .scorri{padding:0 22px}
+@media (max-width:600px){.hs-tessere{--u:calc((100vw - 32px - 2*14px - 8px) / 2);padding:0 14px}.hs-tessere>.grande{grid-row:span 1}.hs-testa{padding:14px}.hs .scorri{padding:0 14px}.hs-apri{width:100%;text-align:center}}
+
+/* Da guardare subito */
+.hs-evidenza{border:2px solid var(--t-arancio);background:color-mix(in srgb,var(--t-arancio) 8%,var(--superficie));padding:16px 20px 18px;margin-bottom:28px}
+.hs-evidenza.rosso{border-color:var(--t-rosso);background:color-mix(in srgb,var(--t-rosso) 6%,var(--superficie))}
+.hs-evidenza h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:700 1.45rem/1.1 "Barlow Semi Condensed",Barlow,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.03em;margin-bottom:12px}
+.hs-evidenza h2 small{font:600 .95rem Barlow,system-ui,sans-serif;text-transform:none;letter-spacing:0;color:var(--testo-2)}
+.hs-pulsa{width:14px;height:14px;border-radius:50%;background:#e0382f;animation:vv-pulsa 2s infinite}
+.hs-evidenza.giallo .hs-pulsa{background:#f2b01e;animation:none}
+.hs-ev-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+.hs-ev{display:flex;align-items:center;gap:12px;text-align:left;border:1px solid var(--linea);border-left:6px solid #f2b01e;background:var(--superficie);padding:10px 12px;font:inherit;color:var(--testo);cursor:pointer}
+.hs-ev.rosso{border-left-color:#e0382f}
+.hs-ev:hover{border-color:var(--testo-3)}
+.hs-ev i{width:10px;height:10px;border-radius:50%;background:#f2b01e;flex:none}.hs-ev.rosso i{background:#e0382f}
+.hs-ev span{flex:1;min-width:0}.hs-ev b{display:block;font-size:1rem}.hs-ev small{display:block;color:var(--testo-2);font-size:.86rem}
+.hs-ev em{font-style:normal;font-size:.78rem;color:var(--testo-3);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.hs-pulsa,.hs-stato.rosso i{animation:none}}
+
+/* Personalizzazione */
+.hs-guida{background:var(--superficie);border:2px dashed var(--tinta);padding:12px 16px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}
+.hs-guida .spunta{margin:0 0 0 auto}
+.hs-comandi{display:flex;gap:4px;margin-left:auto}
+.hs-cmd{min-width:40px;height:40px;border:1px solid var(--linea-forte);background:var(--superficie);font:inherit;font-weight:700;cursor:pointer;color:var(--testo)}
+.hs-cmd.lungo{padding:0 12px}
+.hs-cmd:disabled{opacity:.35;cursor:default}
+.hs-cmd:not(:disabled):hover{background:var(--tinta);color:var(--tinta-su,#fff)}
+.in-modifica .hs-tessere{min-height:var(--u);outline:2px dashed var(--linea-forte);outline-offset:6px;margin:0 22px;padding:0}
+.hs-mod{position:relative;cursor:grab}
+.hs-mod .tessera{pointer-events:none;animation:none!important}
+.hs-mod.spenta .tessera{opacity:.3;filter:grayscale(1)}
+.hs-mod.trascina{opacity:.4}
+.hs-mod.sopra{outline:3px solid var(--testo);outline-offset:2px}
+.hs-mod-barra{position:absolute;left:6px;right:6px;top:6px;display:flex;gap:3px;align-items:center;z-index:2}
+.hs-maniglia{color:#fff;font-size:1.2rem;text-shadow:0 1px 2px rgba(0,0,0,.5);margin-right:auto}
+.hs-mod-barra button{width:30px;height:30px;border:0;background:rgba(255,255,255,.92);color:#1f2030;font:700 .85rem Barlow,system-ui,sans-serif;cursor:pointer;display:grid;place-items:center}
+.hs-mod-barra button:hover{background:#fff;box-shadow:0 0 0 2px #1f2030}
+.hs-mod .vivo,.hs-mod .sem,.hs-mod .t-barra{visibility:hidden}
+.hs-stato.rosso{color:#b42a24}:root[data-tema=scuro] .hs-stato.rosso{color:#ff8a82}@media (prefers-color-scheme:dark){:root:not([data-tema=chiaro]) .hs-stato.rosso{color:#ff8a82}}
